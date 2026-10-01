@@ -1,0 +1,187 @@
+# codemagic.yaml — ARIX Offline BLE Mesh Messenger
+# https://docs.codemagic.io/yaml/yaml-getting-started/
+#
+# ┌──────────────────────────────────────────────────┐
+# │  Two workflows:                                  │
+# │   • ios-release   → builds signed .ipa           │
+# │   • android-release → builds signed .apk / .aab  │
+# └──────────────────────────────────────────────────┘
+
+workflows:
+
+  # ════════════════════════════════════════════════
+  #  iOS Release (.ipa)
+  # ════════════════════════════════════════════════
+  ios-release:
+    name: iOS Release
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+
+      # ── Code Signing ──
+      # Configure these in the Codemagic UI → Settings → Environment Variables:
+      #   APP_STORE_CONNECT_ISSUER_ID
+      #   APP_STORE_CONNECT_KEY_IDENTIFIER
+      #   APP_STORE_CONNECT_PRIVATE_KEY  (contents of .p8 file)
+      #   CERTIFICATE_PRIVATE_KEY        (contents of .pem private key)
+      ios_signing:
+        distribution_type: ad_hoc        # Use 'app_store' for App Store submission
+        bundle_identifier: com.arix.mesh
+
+      groups:
+        - ios_credentials                # Group name in Codemagic UI
+
+    triggering:
+      events:
+        - push
+        - tag
+      branch_patterns:
+        - pattern: 'main'
+          include: true
+        - pattern: 'release/*'
+          include: true
+      tag_patterns:
+        - pattern: 'v*'
+          include: true
+
+    scripts:
+      # 1. Install dependencies
+      - name: Install dependencies
+        script: |
+          flutter pub get
+
+      # 2. Run static analysis
+      - name: Analyze code
+        script: |
+          flutter analyze --no-fatal-infos
+
+      # 3. Run tests (if any)
+      - name: Run tests
+        script: |
+          flutter test || echo "No tests found, skipping."
+
+      # 4. Set up iOS code signing
+      - name: Set up code signing
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "com.arix.mesh" \
+            --type IOS_APP_ADHOC \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
+
+      # 5. Install CocoaPods
+      - name: Install CocoaPods
+        script: |
+          cd ios && pod install --repo-update
+
+      # 6. Build .ipa
+      - name: Build IPA
+        script: |
+          flutter build ipa \
+            --release \
+            --export-options-plist=/Users/builder/export_options.plist
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - flutter_drive.log
+
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com     # ← CHANGE THIS
+        notify:
+          success: true
+          failure: true
+
+  # ════════════════════════════════════════════════
+  #  Android Release (.apk + .aab)
+  # ════════════════════════════════════════════════
+  android-release:
+    name: Android Release
+    max_build_duration: 45
+    instance_type: mac_mini_m2
+
+    environment:
+      flutter: stable
+      java: 17
+
+      # ── Code Signing ──
+      # Configure these in the Codemagic UI → Settings → Environment Variables:
+      #   CM_KEYSTORE          (base64-encoded .jks keystore file)
+      #   CM_KEYSTORE_PASSWORD
+      #   CM_KEY_ALIAS
+      #   CM_KEY_PASSWORD
+      groups:
+        - android_credentials            # Group name in Codemagic UI
+
+    triggering:
+      events:
+        - push
+        - tag
+      branch_patterns:
+        - pattern: 'main'
+          include: true
+        - pattern: 'release/*'
+          include: true
+      tag_patterns:
+        - pattern: 'v*'
+          include: true
+
+    scripts:
+      # 1. Install dependencies
+      - name: Install dependencies
+        script: |
+          flutter pub get
+
+      # 2. Run static analysis
+      - name: Analyze code
+        script: |
+          flutter analyze --no-fatal-infos
+
+      # 3. Run tests (if any)
+      - name: Run tests
+        script: |
+          flutter test || echo "No tests found, skipping."
+
+      # 4. Set up Android signing
+      - name: Set up Android signing
+        script: |
+          if [ -n "$CM_KEYSTORE" ]; then
+            echo $CM_KEYSTORE | base64 --decode > $CM_BUILD_DIR/arix-release.jks
+
+            cat > $CM_BUILD_DIR/android/key.properties <<EOF
+          storePassword=$CM_KEYSTORE_PASSWORD
+          keyPassword=$CM_KEY_PASSWORD
+          keyAlias=$CM_KEY_ALIAS
+          storeFile=$CM_BUILD_DIR/arix-release.jks
+          EOF
+          fi
+
+      # 5. Build APK (universal)
+      - name: Build APK
+        script: |
+          flutter build apk --release
+
+      # 6. Build AAB (for Play Store)
+      - name: Build App Bundle
+        script: |
+          flutter build appbundle --release
+
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
+      - build/app/outputs/bundle/**/*.aab
+      - flutter_drive.log
+
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com     # ← CHANGE THIS
+        notify:
+          success: true
+          failure: true

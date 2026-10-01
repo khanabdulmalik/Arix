@@ -1,0 +1,43 @@
+name: arix
+description: Offline BLE mesh messaging app with E2EE.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+
+  # BLE
+  flutter_blue_plus: ^1.31.0
+
+  # Cryptography (libsodium bindings)
+  flutter_sodium: ^0.2.0
+
+  # Secure key storage (OS keychain / keystore)
+  flutter_secure_storage: ^9.0.0
+
+  # Local SQLite database
+  sqflite: ^2.3.0
+  path: ^1.8.3
+  path_provider: ^2.1.0
+
+  # State management
+  flutter_riverpod: ^2.4.0
+
+  # Typography
+  google_fonts: ^6.1.0
+
+  # Utilities
+  uuid: ^4.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
